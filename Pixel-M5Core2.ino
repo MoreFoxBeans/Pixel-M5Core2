@@ -1,12 +1,5 @@
-#include <AXP192.h>
-#include <Free_Fonts.h>
-#include <M5Core2.h>
-#include <M5Display.h>
-#include <M5Touch.h>
-#include <RTC.h>
-#include <Speaker.h>
 #include <SD.h>
-#include <M5GFX.h>
+#include <M5Unified.h>
 
 #define CANVAS_WIDTH    64
 #define CANVAS_HEIGHT   32
@@ -16,9 +9,8 @@
 #define BORDER_COLOR        0x632C
 #define SEPERATOR_COLOR     0xCE79
 
-M5GFX tft;
-M5Canvas gui(&tft);
-M5Canvas canvas(&tft);
+M5Canvas gui(&M5.Display);
+M5Canvas canvas(&M5.Display);
 
 uint16_t viewX = 0;
 uint16_t viewY = 0;
@@ -29,14 +21,23 @@ uint32_t frames = 0;
 void drawScreen(bool whole=false, bool clock=false);
 
 void setup(void) {
-  M5.begin(true, true, false, false);
-  M5.Axp.SetLcdVoltage(map(32, 0, 255, 2500, 3300));
-  M5.Axp.SetSpkEnable(0);
-  M5.Axp.SetLed(0);
+  auto cfg = M5.config();
+  cfg.clear_display  = true;
+  cfg.output_power   = false;
+  cfg.internal_imu   = true;
+  cfg.internal_rtc   = true;
+  cfg.internal_spk   = false;
+  cfg.internal_mic   = false;
+  cfg.external_imu   = false;
+  cfg.external_rtc   = false;
+  cfg.external_spk   = false;
+  cfg.led_brightness = 0;
+
+  M5.begin(cfg);
   
-  tft.begin();
-  tft.fillScreen(BACKGROUND_COLOR);
-  tft.loadFont(SD, "font");
+  M5.Display.setBrightness(32);
+  M5.Display.begin();
+  M5.Display.loadFont("font", SD);
 
   gui.createSprite(320, 240);
   gui.fillSprite(TFT_TRANSPARENT);
@@ -48,12 +49,14 @@ void setup(void) {
 
   canvas.createSprite(CANVAS_WIDTH, CANVAS_HEIGHT);
   canvas.fillSprite(TFT_WHITE);
+
+  M5.Display.fillScreen(BACKGROUND_COLOR);
 }
 
 void loop(void) {
   M5.update();
 
-  tft.waitDisplay();
+  M5.Display.waitDisplay();
 
   if ((frames % 30) == 0) {
     drawScreen(false, true);
@@ -63,47 +66,44 @@ void loop(void) {
 
   ++frames;
 
-  lgfx::touch_point_t tp[2];
+  lgfx::touch_point_t tp[1];
 
-  uint8_t num = tft.getTouch(tp, 2);
+  uint8_t num = M5.Display.getTouch(tp, 1);
 
   if (num) {
-    tft.startWrite();
-
-    for (uint8_t i = 0; i < 2; ++i) {
-      tft.fillCircle(tp[i].x, tp[i].y, 5, TFT_RED);
-    }
-
-    tft.endWrite();
+    M5.Display.startWrite();
+    M5.Display.fillCircle(tp[0].x, tp[0].y, 5, TFT_RED);
+    M5.Display.endWrite();
   }
 }
 
-void drawScreen(bool whole=false, bool clock=false) {
+void drawScreen(bool whole, bool clock) {
   if (whole) {
     clock = false;
   }
   
-  tft.setTextDatum(top_right);
-  tft.setTextColor(BORDER_COLOR);
-
-  tft.startWrite();
+  M5.Display.startWrite();
 
   if (whole) {
-    tft.fillScreen(BACKGROUND_COLOR);
+    M5.Display.fillScreen(BACKGROUND_COLOR);
   }
 
   if (clock) {
-    tft.fillRect(0, 0, 320, 22, BACKGROUND_COLOR);
+    M5.Display.fillRect(0, 0, 320, 22, BACKGROUND_COLOR);
   }
 
   canvas.pushRotateZoom(viewX, viewY, 0, viewZ, viewZ);
 
   if (clock || whole) {
-    String status = "3:04 PM / " + String(round(M5.Axp.GetBatteryLevel()), 0) + "%";
-    tft.drawString(status, 320 - 8, 8);
+    M5.Display.setTextDatum(top_right);
+    M5.Display.setTextColor(BORDER_COLOR);
+    M5.Display.setTextSize(1);
+
+    String status = "3:04 PM / " + String(M5.Power.getBatteryLevel()) + "%";
+    M5.Display.drawString(status, 320 - 8, 8);
   }
 
   gui.pushSprite(0, 0, TFT_TRANSPARENT);
 
-  tft.endWrite();
+  M5.Display.endWrite();
 }
