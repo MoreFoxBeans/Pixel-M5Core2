@@ -1,0 +1,12 @@
+[
+    {
+      "family": "Bahnschrift SemiBold SemiCondensed",
+      "axes": {
+        "wght": 600.0,
+        "wdth": 87.0
+      },
+      "prefFamily": "Bahnschrift",
+      "prefSubfamily": "SemiBold SemiCondensed",
+      "weightOverride": 600
+    }
+  ]
