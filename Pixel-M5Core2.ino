@@ -28,8 +28,12 @@ M5Canvas hud(&screen); // HUD on top
 M5Canvas toolbar(&screen); // Toolbar on bottom
 M5Canvas canvas(&screen); // Drawing canvas
 
-// Store touch info when started touching canvas for panning and shapes
+// Previous touch info
 uint8_t ptouched;
+int16_t ptx;
+int16_t pty;
+
+// Store touch info when started touching canvas for panning and shapes
 int16_t otx;
 int16_t oty;
 int16_t oviewX;
@@ -127,10 +131,11 @@ void loop(void) {
   // Touch pressed
   if (!ptouched && touched) {
     if (tp[0].y < 202) { // Client area tapped
+      otx = tp[0].x;
+      oty = tp[0].y;
+      
       if (tool == pan) {
         panning = true;
-        otx = tp[0].x;
-        oty = tp[0].y;
         oviewX = viewX;
         oviewY = viewY;
       }
@@ -158,6 +163,41 @@ void loop(void) {
     }
   }
 
+  // Touched at all
+  if (touched) {
+    if (tp[0].y < 202) {
+      int16_t canvasPointX = (tp[0].x - viewX) / viewZ;
+      int16_t canvasPointY = (tp[0].y - viewY) / viewZ;
+
+      if (tool == drawing) {
+        if ((canvasPointX >= 0) && (canvasPointX < CANVAS_WIDTH) && (canvasPointY >= 0) && (canvasPointY < CANVAS_HEIGHT)) {
+          if (drawingTool == pencil || drawingTool == eraser) {
+            canvas.setColor(drawColor);
+            
+            if (drawingTool == eraser) {
+              canvas.setColor(TFT_WHITE);
+            }
+            
+            if (ptouched) {
+              int16_t pcanvasPointX = (ptx - viewX) / viewZ;
+              int16_t pcanvasPointY = (pty - viewY) / viewZ;
+
+              canvas.drawLine(pcanvasPointX, pcanvasPointY, canvasPointX, canvasPointY);
+            } else {
+              canvas.writePixel(canvasPointX, canvasPointY);
+            }
+
+            drawScreen(false, false, true);
+          }
+        }
+      } else if (tool == shapes) {
+
+      } else if (tool == fills) {
+
+      }
+    }
+  }
+
   // Touch held
   if (ptouched && touched) {
     if ((tool == pan) && panning) {
@@ -173,15 +213,17 @@ void loop(void) {
   }
 
   ptouched = touched;
+  ptx = tp[0].x;
+  pty = tp[0].y;
 
-  if ((frames % 100) == 0) { // Time might have changed
+  if ((frames % 100) == 0) { // Time has most likely changed
     drawHUD();
     drawScreen(false, true, false);
   }
 
-  M5.Display.waitDisplay();
+  M5.Display.waitDisplay(); // IDK what this does but it seems safe :D
   screen.pushSprite(0, 0); // Update the screen
-
+  
   ++frames;
 }
 
@@ -298,8 +340,11 @@ void drawScreen(bool whole, bool drawClock, bool drawCanvas) {
   // Draw main drawing canvas with outline
   if (drawCanvas || ((viewY <= 24) && drawClock) || whole) {
     canvas.pushRotateZoom(&screen, viewX + ((CANVAS_WIDTH * (uint16_t)viewZ + viewZ) >> 1), viewY + ((CANVAS_HEIGHT * (uint16_t)viewZ + viewZ) >> 1), 0, viewZ, viewZ);
-    screen.drawRect(viewX - 1, viewY - 1, CANVAS_WIDTH * viewZ + 2, CANVAS_HEIGHT * viewZ + 2, BORDER_COLOR);
-    screen.drawRoundRect(viewX - 2, viewY - 2, CANVAS_WIDTH * viewZ + 4, CANVAS_HEIGHT * viewZ + 4, 2, BORDER_COLOR);
+
+    if (drawClock || whole) {
+      screen.drawRect(viewX - 1, viewY - 1, CANVAS_WIDTH * viewZ + 2, CANVAS_HEIGHT * viewZ + 2, BORDER_COLOR);
+      screen.drawRoundRect(viewX - 2, viewY - 2, CANVAS_WIDTH * viewZ + 4, CANVAS_HEIGHT * viewZ + 4, 2, BORDER_COLOR);
+    }
   }
 
   // Draw HUD on top
