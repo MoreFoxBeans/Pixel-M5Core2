@@ -19,6 +19,7 @@
 #define BORDER_COLOR        0x632C
 #define SEPERATOR_COLOR     0xCE79
 
+// Change these to change canvas size
 #define CANVAS_WIDTH    64
 #define CANVAS_HEIGHT   32
 
@@ -39,13 +40,18 @@ int16_t viewX = 0;
 int16_t viewY = 0;
 uint8_t viewZ = 4;
 
-bool panning = false;
+bool grid = true; // Show canvas grid
 
+bool panning = false; // Is currently panning?
+
+// Tool menu selected
 enum Tool { drawing, shapes, fills, pan };
 Tool tool = pan;
 
+// Current drawing color
 uint16_t drawColor = M5.Display.color24to16(0x000000);
 
+// Menu sub-item selected
 enum DrawingTools { pencil, eraser, eyedropper, dither };
 enum ShapeTools { rectangle, line, circle };
 enum FillTools { fillNormal, fillDiagonal, fillAll };
@@ -55,8 +61,9 @@ FillTools fillTool = fillNormal;
 
 uint32_t frames = 0; // Frame count
 
+// Prototypes (match functions!)
 void drawHUD(void);
-void drawToolbar(int8_t drawIcons);
+void drawToolbar();
 void drawScreen(bool whole, bool drawClock, bool drawCanvas);
 
 void setup(void) {
@@ -72,7 +79,6 @@ void setup(void) {
   cfg.external_rtc   = false;
   cfg.external_spk   = false;
   cfg.led_brightness = 0; // Power LED
-
   M5.begin(cfg);
 
   // Keep trying to initialize SD
@@ -83,30 +89,30 @@ void setup(void) {
   M5.Display.setBrightness(32);
   M5.Display.begin();
 
+  // Create screen buffer
   screen.createSprite(320, 240);
   screen.fillSprite(BACKGROUND_COLOR);
   screen.setTextSize(1);
   screen.setFont(&Pixel128pt7b);
   screen.setTextWrap(false, false);
 
+  // Create HUD text buffer
   hud.createSprite(320 - 16, 16);
   hud.fillSprite(TFT_TRANSPARENT);
   hud.setTextSize(1);
   hud.setFont(&Pixel128pt7b);
   hud.setTextWrap(false, false);
 
+  // Create bottom toolbar buffer
   toolbar.createSprite(320, 38);
   toolbar.fillSprite(GUI_COLOR);
-  toolbar.writeFillRect(0, 0, 320, 2, BORDER_COLOR);
-  toolbar.writeFillRect(0, 2, 320, 36, GUI_COLOR);
-  toolbar.writeFastVLine(41, 10, 20, SEPERATOR_COLOR);
-  toolbar.writeFastVLine(196, 10, 20, SEPERATOR_COLOR);
-  toolbar.writeFastVLine(279, 10, 20, SEPERATOR_COLOR);
 
+  // Create drawing toolbar buffer
   canvas.createSprite(CANVAS_WIDTH, CANVAS_HEIGHT);
   canvas.fillSprite(TFT_WHITE);
 
-  drawToolbar(-1);
+  // Draw everything!
+  drawToolbar();
   drawHUD();
   drawScreen(true, true, true);
 }
@@ -114,20 +120,41 @@ void setup(void) {
 void loop(void) {
   M5.update();
 
-  bool canvasMoved = false;
-
   lgfx::touch_point_t tp[1];
 
   uint8_t touched = M5.Display.getTouch(tp, 1);
 
   // Touch pressed
   if (!ptouched && touched) {
-    if ((tool == pan) && (tp[0].y < 202)) {
-      panning = true;
-      otx = tp[0].x;
-      oty = tp[0].y;
-      oviewX = viewX;
-      oviewY = viewY;
+    if (tp[0].y < 202) { // Client area tapped
+      if (tool == pan) {
+        panning = true;
+        otx = tp[0].x;
+        oty = tp[0].y;
+        oviewX = viewX;
+        oviewY = viewY;
+      }
+    } else { // Toolbar tapped
+      if (tp[0].x < 36) { // Main menu
+        
+      } else if (tp[0].x < 84) { // Draw menu
+        tool = drawing;
+      } else if (tp[0].x < 120) { // Shapes menu
+        tool = shapes;
+      } else if (tp[0].x < 156) { // Fills menu
+        tool = fills;
+      } else if (tp[0].x < 192) { // Pan
+        tool = pan;
+      } else if (tp[0].x < 240) { // View menu
+
+      } else if (tp[0].x < 276) { // Grid
+        grid = !grid;
+      } else { // Color picker
+
+      }
+
+      drawToolbar();
+      drawScreen(false, false, false);
     }
   }
 
@@ -136,7 +163,7 @@ void loop(void) {
     if ((tool == pan) && panning) {
       viewX = oviewX + (tp[0].x - otx);
       viewY = oviewY + (tp[0].y - oty);
-      canvasMoved = true;
+      drawScreen(true, true, true);
     }
   }
 
@@ -149,13 +176,11 @@ void loop(void) {
 
   if ((frames % 100) == 0) { // Time might have changed
     drawHUD();
-    drawScreen(canvasMoved, true, canvasMoved);
-  } else {
-    drawScreen(canvasMoved, false, canvasMoved);
+    drawScreen(false, true, false);
   }
 
   M5.Display.waitDisplay();
-  screen.pushSprite(0, 0); // Draw screen to screen
+  screen.pushSprite(0, 0); // Update the screen
 
   ++frames;
 }
@@ -169,78 +194,89 @@ void drawHUD(void) {
   m5::rtc_datetime_t dt;
 
   if (M5.Rtc.getDateTime(&dt)) {
+    // Convert to 12-hour time
+    bool pm = false;
+
     if (dt.time.hours >= 12) {
+      pm = true;
+
       dt.time.hours -= 12;
 
       if (dt.time.hours == 0) dt.time.hours = 12;
-
-      snprintf(rbuf, sizeof rbuf, "%d:%02d PM / %d%%", dt.time.hours, dt.time.minutes, M5.Power.getBatteryLevel());
     } else {
       if (dt.time.hours == 0) dt.time.hours = 12;
-
-      snprintf(rbuf, sizeof rbuf, "%d:%02d AM / %d%%", dt.time.hours, dt.time.minutes, M5.Power.getBatteryLevel());
     }
-  } else {
+
+    snprintf(rbuf, sizeof rbuf, pm ? "%d:%02d PM / %d%%" : "%d:%02d AM / %d%%", dt.time.hours, dt.time.minutes, M5.Power.getBatteryLevel());
+  } else { // RTC broken :(
     snprintf(rbuf, sizeof rbuf, "ERROR / %d%%", M5.Power.getBatteryLevel());
   }
 
   // Draw HUD text
   hud.setTextColor(BORDER_COLOR);
-
   hud.setTextDatum(top_right);
   hud.drawString(rbuf, 320 - 16, 0);
 }
 
-void drawToolbar(int8_t drawIcons) {
-  /*
-   * -1 = all icons
-   * 0 = no icons
-   * 1 = first icon
-   * ...
-   */
+void drawToolbar() {
+  // Clear toolbar and draw seperators
+  toolbar.fillSprite(GUI_COLOR);
+  toolbar.writeFillRect(0, 0, 320, 2, BORDER_COLOR);
+  toolbar.writeFastVLine(41, 10, 20, SEPERATOR_COLOR);
+  toolbar.writeFastVLine(196, 10, 20, SEPERATOR_COLOR);
+  toolbar.writeFastVLine(279, 10, 20, SEPERATOR_COLOR);
 
-  if (drawIcons != 0) {
-    String toolIcon;
+  String toolIcon;
 
-    if ((drawIcons == -1) || (drawIcons == 1)) toolbar.drawBmpFile(SD, "/icons/menu.bmp", 0, 2);
-    if ((drawIcons == -1) || (drawIcons == 2)) {
-      switch (drawingTool) {
-        case pencil: toolIcon = "/icons/menu-drawing/pencil.bmp"; break;
-        case eraser: toolIcon = "/icons/menu-drawing/eraser.bmp"; break;
-        case eyedropper: toolIcon = "/icons/menu-drawing/eyedropper.bmp"; break;
-        case dither: toolIcon = "/icons/menu-drawing/dither.bmp"; break;
-      }
+  toolbar.drawBmpFile(SD, "/icons/menu.bmp", 0, 2); // Menu icon
 
-      toolbar.drawBmpFile(SD, toolIcon, 48, 2);
-    }
-    if ((drawIcons == -1) || (drawIcons == 3)) {
-      switch (shapeTool) {
-        case rectangle: toolIcon = "/icons/menu-shapes/rectangle.bmp"; break;
-        case line: toolIcon = "/icons/menu-shapes/line.bmp"; break;
-        case circle: toolIcon = "/icons/menu-shapes/circle.bmp"; break;
-      }
-
-      toolbar.drawBmpFile(SD, toolIcon, 84, 2);
-    }
-    if ((drawIcons == -1) || (drawIcons == 4)) {
-      switch (fillTool) {
-        case fillNormal: toolIcon = "/icons/menu-fill/fill.bmp"; break;
-        case fillDiagonal: toolIcon = "/icons/menu-fill/fill-diagonal.bmp"; break;
-        case fillAll: toolIcon = "/icons/menu-fill/fill-all.bmp"; break;
-      }
-
-      toolbar.drawBmpFile(SD, toolIcon, 120, 2);
-    }
-    if ((drawIcons == -1) || (drawIcons == 5)) toolbar.drawBmpFile(SD, "/icons/pan.bmp", 156, 2);
-    if ((drawIcons == -1) || (drawIcons == 6)) toolbar.drawBmpFile(SD, "/icons/menu-view.bmp", 204, 2);
-    if ((drawIcons == -1) || (drawIcons == 7)) toolbar.drawBmpFile(SD, "/icons/grid.bmp", 240, 2);
+  // Drawing menu icon
+  switch (drawingTool) {
+    case pencil: toolIcon = "/icons/menu-drawing/pencil.bmp"; break;
+    case eraser: toolIcon = "/icons/menu-drawing/eraser.bmp"; break;
+    case eyedropper: toolIcon = "/icons/menu-drawing/eyedropper.bmp"; break;
+    case dither: toolIcon = "/icons/menu-drawing/dither.bmp"; break;
   }
 
+  toolbar.drawBmpFile(SD, toolIcon, 48, 2);
+
+  // Shapes menu icon
+  switch (shapeTool) {
+    case rectangle: toolIcon = "/icons/menu-shapes/rectangle.bmp"; break;
+    case line: toolIcon = "/icons/menu-shapes/line.bmp"; break;
+    case circle: toolIcon = "/icons/menu-shapes/circle.bmp"; break;
+  }
+
+  toolbar.drawBmpFile(SD, toolIcon, 84, 2);
+
+  // Fills menu icon
+  switch (fillTool) {
+    case fillNormal: toolIcon = "/icons/menu-fill/fill.bmp"; break;
+    case fillDiagonal: toolIcon = "/icons/menu-fill/fill-diagonal.bmp"; break;
+    case fillAll: toolIcon = "/icons/menu-fill/fill-all.bmp"; break;
+  }
+
+  toolbar.drawBmpFile(SD, toolIcon, 120, 2);
+
+  toolbar.drawBmpFile(SD, "/icons/pan.bmp", 156, 2); // Pan icon
+  toolbar.drawBmpFile(SD, "/icons/menu-view.bmp", 204, 2); // View menu icon
+  toolbar.drawBmpFile(SD, "/icons/grid.bmp", 240, 2); // Grid icon
+
+  uint16_t outlineX = 320; // If outline is invalid, draw it outside screen.
+
   switch (tool) {
-    case drawing: toolbar.drawRoundRect(48, 2, 36, 36, 8); break;
-    case shapes: toolbar.drawRoundRect(84, 2, 36, 36, 8); break;
-    case fills: toolbar.drawRoundRect(120, 2, 36, 36, 8); break;
-    case pan: toolbar.drawRoundRect(156, 2, 36, 36, 8); break;
+    case drawing: outlineX = 48; break;
+    case shapes: outlineX = 84; break;
+    case fills: outlineX = 120; break;
+    case pan: outlineX = 156; break;
+  }
+
+  toolbar.drawRoundRect(outlineX + 3, 2 + 3, 30, 30, 6, SEPERATOR_COLOR);
+  toolbar.drawRoundRect(outlineX + 4, 2 + 4, 28, 28, 5, SEPERATOR_COLOR);
+  
+  if (grid) {
+    toolbar.drawRoundRect(240 + 3, 2 + 3, 30, 30, 6, SEPERATOR_COLOR);
+    toolbar.drawRoundRect(240 + 4, 2 + 4, 28, 28, 5, SEPERATOR_COLOR);
   }
 
   // Draw current color preview
@@ -277,25 +313,25 @@ void drawScreen(bool whole, bool drawClock, bool drawCanvas) {
   // Draw round corners
   screen.setColor(TFT_BLACK);
 
-  screen.writeFastHLine(0, 0, 5);
+  screen.writeFastHLine(0, 0, 5); // Top-left
   screen.writeFastHLine(0, 1, 3);
   screen.writeFastHLine(0, 2, 2);
   screen.writeFastHLine(0, 3, 1);
   screen.writeFastHLine(0, 4, 1);
 
-  screen.writeFastHLine(320 - 5, 0, 5);
+  screen.writeFastHLine(320 - 5, 0, 5); // Top-right
   screen.writeFastHLine(320 - 3, 1, 3);
   screen.writeFastHLine(320 - 2, 2, 2);
   screen.writeFastHLine(320 - 1, 3, 1);
   screen.writeFastHLine(320 - 1, 4, 1);
 
-  screen.writeFastHLine(0, 240 - 1, 5);
+  screen.writeFastHLine(0, 240 - 1, 5); // Bottom-left
   screen.writeFastHLine(0, 240 - 2, 3);
   screen.writeFastHLine(0, 240 - 3, 2);
   screen.writeFastHLine(0, 240 - 4, 1);
   screen.writeFastHLine(0, 240 - 5, 1);
 
-  screen.writeFastHLine(320 - 5, 240 - 1, 5);
+  screen.writeFastHLine(320 - 5, 240 - 1, 5); // Bottom-right
   screen.writeFastHLine(320 - 3, 240 - 2, 3);
   screen.writeFastHLine(320 - 2, 240 - 3, 2);
   screen.writeFastHLine(320 - 1, 240 - 4, 1);
