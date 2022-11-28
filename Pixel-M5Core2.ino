@@ -39,7 +39,19 @@ int16_t viewX = 0;
 int16_t viewY = 0;
 uint8_t viewZ = 4;
 
+bool panning = false;
+
+enum Tool { drawing, shapes, fills, pan };
+Tool tool = pan;
+
 uint16_t drawColor = M5.Display.color24to16(0x000000);
+
+enum DrawingTools { pencil, eraser, eyedropper, dither };
+enum ShapeTools { rectangle, line, circle };
+enum FillTools { fillNormal, fillDiagonal, fillAll };
+DrawingTools drawingTool = pencil;
+ShapeTools shapeTool = rectangle;
+FillTools fillTool = fillNormal;
 
 uint32_t frames = 0; // Frame count
 
@@ -108,17 +120,29 @@ void loop(void) {
 
   uint8_t touched = M5.Display.getTouch(tp, 1);
 
+  // Touch pressed
   if (!ptouched && touched) {
-    otx = tp[0].x;
-    oty = tp[0].y;
-    oviewX = viewX;
-    oviewY = viewY;
+    if ((tool == pan) && (tp[0].y < 202)) {
+      panning = true;
+      otx = tp[0].x;
+      oty = tp[0].y;
+      oviewX = viewX;
+      oviewY = viewY;
+    }
   }
 
+  // Touch held
   if (ptouched && touched) {
-    viewX = oviewX + (tp[0].x - otx);
-    viewY = oviewY + (tp[0].y - oty);
-    canvasMoved = true;
+    if ((tool == pan) && panning) {
+      viewX = oviewX + (tp[0].x - otx);
+      viewY = oviewY + (tp[0].y - oty);
+      canvasMoved = true;
+    }
+  }
+
+  // Touch released
+  if (ptouched && !touched) {
+    panning = false;
   }
 
   ptouched = touched;
@@ -176,13 +200,47 @@ void drawToolbar(int8_t drawIcons) {
    */
 
   if (drawIcons != 0) {
+    String toolIcon;
+
     if ((drawIcons == -1) || (drawIcons == 1)) toolbar.drawBmpFile(SD, "/icons/menu.bmp", 0, 2);
-    if ((drawIcons == -1) || (drawIcons == 2)) toolbar.drawBmpFile(SD, "/icons/menu-drawing/pencil.bmp", 48, 2);
-    if ((drawIcons == -1) || (drawIcons == 3)) toolbar.drawBmpFile(SD, "/icons/menu-shapes/rectangle.bmp", 84, 2);
-    if ((drawIcons == -1) || (drawIcons == 4)) toolbar.drawBmpFile(SD, "/icons/menu-fill/fill.bmp", 120, 2);
+    if ((drawIcons == -1) || (drawIcons == 2)) {
+      switch (drawingTool) {
+        case pencil: toolIcon = "/icons/menu-drawing/pencil.bmp"; break;
+        case eraser: toolIcon = "/icons/menu-drawing/eraser.bmp"; break;
+        case eyedropper: toolIcon = "/icons/menu-drawing/eyedropper.bmp"; break;
+        case dither: toolIcon = "/icons/menu-drawing/dither.bmp"; break;
+      }
+
+      toolbar.drawBmpFile(SD, toolIcon, 48, 2);
+    }
+    if ((drawIcons == -1) || (drawIcons == 3)) {
+      switch (shapeTool) {
+        case rectangle: toolIcon = "/icons/menu-shapes/rectangle.bmp"; break;
+        case line: toolIcon = "/icons/menu-shapes/line.bmp"; break;
+        case circle: toolIcon = "/icons/menu-shapes/circle.bmp"; break;
+      }
+
+      toolbar.drawBmpFile(SD, toolIcon, 84, 2);
+    }
+    if ((drawIcons == -1) || (drawIcons == 4)) {
+      switch (fillTool) {
+        case fillNormal: toolIcon = "/icons/menu-fill/fill.bmp"; break;
+        case fillDiagonal: toolIcon = "/icons/menu-fill/fill-diagonal.bmp"; break;
+        case fillAll: toolIcon = "/icons/menu-fill/fill-all.bmp"; break;
+      }
+
+      toolbar.drawBmpFile(SD, toolIcon, 120, 2);
+    }
     if ((drawIcons == -1) || (drawIcons == 5)) toolbar.drawBmpFile(SD, "/icons/pan.bmp", 156, 2);
     if ((drawIcons == -1) || (drawIcons == 6)) toolbar.drawBmpFile(SD, "/icons/menu-view.bmp", 204, 2);
     if ((drawIcons == -1) || (drawIcons == 7)) toolbar.drawBmpFile(SD, "/icons/grid.bmp", 240, 2);
+  }
+
+  switch (tool) {
+    case drawing: toolbar.drawRoundRect(48, 2, 36, 36, 8); break;
+    case shapes: toolbar.drawRoundRect(84, 2, 36, 36, 8); break;
+    case fills: toolbar.drawRoundRect(120, 2, 36, 36, 8); break;
+    case pan: toolbar.drawRoundRect(156, 2, 36, 36, 8); break;
   }
 
   // Draw current color preview
@@ -215,4 +273,31 @@ void drawScreen(bool whole, bool drawClock, bool drawCanvas) {
 
   // Draw toolbar on bottom
   toolbar.pushSprite(&screen, 0, 202);
+
+  // Draw round corners
+  screen.setColor(TFT_BLACK);
+
+  screen.writeFastHLine(0, 0, 5);
+  screen.writeFastHLine(0, 1, 3);
+  screen.writeFastHLine(0, 2, 2);
+  screen.writeFastHLine(0, 3, 1);
+  screen.writeFastHLine(0, 4, 1);
+
+  screen.writeFastHLine(320 - 5, 0, 5);
+  screen.writeFastHLine(320 - 3, 1, 3);
+  screen.writeFastHLine(320 - 2, 2, 2);
+  screen.writeFastHLine(320 - 1, 3, 1);
+  screen.writeFastHLine(320 - 1, 4, 1);
+
+  screen.writeFastHLine(0, 240 - 1, 5);
+  screen.writeFastHLine(0, 240 - 2, 3);
+  screen.writeFastHLine(0, 240 - 3, 2);
+  screen.writeFastHLine(0, 240 - 4, 1);
+  screen.writeFastHLine(0, 240 - 5, 1);
+
+  screen.writeFastHLine(320 - 5, 240 - 1, 5);
+  screen.writeFastHLine(320 - 3, 240 - 2, 3);
+  screen.writeFastHLine(320 - 2, 240 - 3, 2);
+  screen.writeFastHLine(320 - 1, 240 - 4, 1);
+  screen.writeFastHLine(320 - 1, 240 - 5, 1);
 }
