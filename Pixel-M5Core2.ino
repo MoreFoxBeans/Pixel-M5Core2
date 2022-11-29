@@ -4,15 +4,14 @@
 /*
  * Converted using https://rop.nl/truetype2gfx/
  * Had to use C header instead of .VLW because
- * drawing text with the .VLW loaded created
- * extreme lag for some reason.
+ * drawing text with the .VLW loaded was slow.
  */
 #include "Pixel128pt7b.h"
 
 /*
  * The display accepts 16-bit colors, use
  * http://www.rinkydinkelectronics.com/calc_rgb565.php
- * to find these codes.
+ * to convert 24-bit to 16-bit.
  */
 #define BACKGROUND_COLOR    0x9CD3
 #define GUI_COLOR           0xFFFF
@@ -85,7 +84,7 @@ void setup(void) {
   cfg.led_brightness = 0; // Power LED
   M5.begin(cfg);
 
-  // Keep trying to initialize SD
+  // Keep trying to initialize SD if failed
   while (SD.begin(GPIO_NUM_4, SPI, 25000000) == false) {
     delay(500);
   }
@@ -262,17 +261,9 @@ void drawHUD(void) {
 
   if (M5.Rtc.getDateTime(&dt)) {
     // Convert to 12-hour time
-    bool pm = false;
-
-    if (dt.time.hours >= 12) {
-      pm = true;
-
-      dt.time.hours -= 12;
-
-      if (dt.time.hours == 0) dt.time.hours = 12;
-    } else {
-      if (dt.time.hours == 0) dt.time.hours = 12;
-    }
+    bool pm = dt.time.hours >= 12;
+    dt.time.hours %= 12;
+    if (dt.time.hours == 0) dt.time.hours = 12;
 
     snprintf(rbuf, sizeof rbuf, pm ? "%d:%02d PM / %d%%" : "%d:%02d AM / %d%%", dt.time.hours, dt.time.minutes, M5.Power.getBatteryLevel());
   } else { // RTC broken :(
