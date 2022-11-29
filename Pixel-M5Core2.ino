@@ -114,6 +114,10 @@ void setup(void) {
   canvas.createSprite(CANVAS_WIDTH, CANVAS_HEIGHT);
   canvas.fillSprite(TFT_WHITE);
 
+  // Center the canvas
+  viewX = (320 - (CANVAS_WIDTH * viewZ)) >> 1;
+  viewY = ((240 - 38) - (CANVAS_HEIGHT * viewZ)) >> 1;
+
   // Draw everything!
   drawToolbar();
   drawHUD();
