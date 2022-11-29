@@ -130,11 +130,20 @@ void loop(void) {
 
   // Touch pressed
   if (!ptouched && touched) {
+    int16_t canvasPointX = (tp[0].x - viewX) / viewZ;
+    int16_t canvasPointY = (tp[0].y - viewY) / viewZ;
+
     if (tp[0].y < 202) { // Client area tapped
       otx = tp[0].x;
       oty = tp[0].y;
       
-      if (tool == pan) {
+      if (tool == drawing) {
+        if (drawingTool == eyedropper) {
+          drawColor = canvas.readPixel(canvasPointX, canvasPointY);
+          drawToolbar();
+          drawScreen(false, false, false);
+        }
+      } else if (tool == pan) {
         panning = true;
         oviewX = viewX;
         oviewY = viewY;
@@ -143,11 +152,23 @@ void loop(void) {
       if (tp[0].x < 36) { // Main menu
         
       } else if (tp[0].x < 84) { // Draw menu
-        tool = drawing;
+        if (tool == drawing) {
+          drawingTool = (DrawingTools)((drawingTool + 1) % 4);
+        } else {
+          tool = drawing;
+        }
       } else if (tp[0].x < 120) { // Shapes menu
-        tool = shapes;
+        if (tool == shapes) {
+          shapeTool = (ShapeTools)((shapeTool + 1) % 3);
+        } else {
+          tool = shapes;
+        }
       } else if (tp[0].x < 156) { // Fills menu
-        tool = fills;
+        if (tool == fills) {
+          fillTool = (FillTools)((fillTool + 1) % 3);
+        } else {
+          tool = fills;
+        }
       } else if (tp[0].x < 192) { // Pan
         tool = pan;
       } else if (tp[0].x < 240) { // View menu
@@ -170,25 +191,29 @@ void loop(void) {
       int16_t canvasPointY = (tp[0].y - viewY) / viewZ;
 
       if (tool == drawing) {
-        if ((canvasPointX >= 0) && (canvasPointX < CANVAS_WIDTH) && (canvasPointY >= 0) && (canvasPointY < CANVAS_HEIGHT)) {
-          if (drawingTool == pencil || drawingTool == eraser) {
-            canvas.setColor(drawColor);
-            
-            if (drawingTool == eraser) {
-              canvas.setColor(TFT_WHITE);
-            }
-            
-            if (ptouched) {
-              int16_t pcanvasPointX = (ptx - viewX) / viewZ;
-              int16_t pcanvasPointY = (pty - viewY) / viewZ;
+        if (drawingTool == pencil || drawingTool == eraser || drawingTool == dither) {
+          canvas.setColor(drawColor);
+          
+          if (drawingTool == eraser) {
+            canvas.setColor(TFT_WHITE);
+          }
+          
+          if (ptouched && (drawingTool == pencil || drawingTool == eraser)) {
+            int16_t pcanvasPointX = (ptx - viewX) / viewZ;
+            int16_t pcanvasPointY = (pty - viewY) / viewZ;
 
-              canvas.drawLine(pcanvasPointX, pcanvasPointY, canvasPointX, canvasPointY);
+            canvas.drawLine(pcanvasPointX, pcanvasPointY, canvasPointX, canvasPointY);
+          } else {
+            if (drawingTool == dither) {
+              if (((canvasPointX + canvasPointY) % 2) == 0) {
+                canvas.writePixel(canvasPointX, canvasPointY);
+              }
             } else {
               canvas.writePixel(canvasPointX, canvasPointY);
             }
-
-            drawScreen(false, false, true);
           }
+
+          drawScreen(false, false, true);
         }
       } else if (tool == shapes) {
 
@@ -223,7 +248,7 @@ void loop(void) {
 
   M5.Display.waitDisplay(); // IDK what this does but it seems safe :D
   screen.pushSprite(0, 0); // Update the screen
-  
+
   ++frames;
 }
 
